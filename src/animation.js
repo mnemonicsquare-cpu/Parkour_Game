@@ -22,9 +22,11 @@ export class CharacterAnimations {
     const height = bounds.getSize(new THREE.Vector3()).y;
     const scale = 1.8 / height;
     model.scale.multiplyScalar(scale);
-    model.position.y = -bounds.min.y * scale;
+    model.position.y = -bounds.min.y * scale - .9;
     model.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false; } });
-    this.root = new THREE.Group(); this.root.add(model); this.scene.add(this.root); this.model = model;
+    this.root = new THREE.Group();
+    this.flipPivot = new THREE.Group(); this.flipPivot.position.y = .9;
+    this.flipPivot.add(model); this.root.add(this.flipPivot); this.scene.add(this.root); this.model = model;
     this.mixer = new THREE.AnimationMixer(model);
     const entries = Object.entries(files);
     for (let i = 0; i < entries.length; i++) {
