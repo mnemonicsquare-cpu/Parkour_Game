@@ -17,7 +17,7 @@ export class CharacterAnimations {
   async load() {
     const loader = new FBXLoader();
     const load = path => new Promise((resolve, reject) => loader.load(path, resolve, undefined, reject));
-    const model = await load('/assets/Y Bot.fbx');
+    const model = await load(`${import.meta.env.BASE_URL}assets/Y Bot.fbx`);
     const bounds = new THREE.Box3().setFromObject(model);
     const height = bounds.getSize(new THREE.Vector3()).y;
     const scale = 1.8 / height;
@@ -30,7 +30,7 @@ export class CharacterAnimations {
     for (let i = 0; i < entries.length; i++) {
       const [state, file] = entries[i]; this.onProgress?.(`${i + 1}/${entries.length}: ${file}`);
       try {
-        const source = await load('/assets/animations/' + encodeURIComponent(file.split('/').pop()));
+        const source = await load(`${import.meta.env.BASE_URL}assets/animations/` + encodeURIComponent(file.split('/').pop()));
         let clip = source.animations[0];
         if (!clip) throw new Error('нет клипа');
         // All world translation belongs to the physical controller, never to an FBX root track.

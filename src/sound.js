@@ -3,7 +3,7 @@ export class SoundSystem {
   async unlock() {if(!this.context)this.context=new AudioContext();await this.context.resume();}
   async load() {
     const list={step:Array.from({length:10},(_,i)=>`footstep${String(i).padStart(2,'0')}.ogg`),jump:['cloth1.ogg'],land:['dropLeather.ogg'],roll:['cloth2.ogg'],vault:['cloth3.ogg'],climb:['cloth4.ogg'],heavy:['dropLeather.ogg']};
-    for(const [key,files] of Object.entries(list)) this.buffers[key]=files.map(file=>`/assets/sounds/${file}`);
+    for(const [key,files] of Object.entries(list)) this.buffers[key]=files.map(file=>`${import.meta.env.BASE_URL}assets/sounds/${file}`);
   }
   play(key) {if(!this.context||!this.buffers[key]||this.settings.volume===0)return;
     const now=performance.now();if(now-(this.last[key]||0)<120)return;this.last[key]=now;
