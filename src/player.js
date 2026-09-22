@@ -9,14 +9,14 @@ export class Player {
     this.height=1.8; this.radius=.28; this.pos=v(0,.02,4); this.velocity=v(); this.facing=0;
     this.state='idle'; this.grounded=false; this.crouch=false; this.fallStart=0; this.fallHeight=0; this.coyote=0; this.jumpBuffer=0;
     this.jumpCount=0;this.flipDuration=.72;this.flipTime=0;this.flipPhase=0;
-    this.actionTime=0; this.actionDuration=0; this.actionFrom=v(); this.actionTo=v(); this.ledge=null; this.obstacle='нет'; this.lastCheckpoint=v(0,.02,4);
+    this.actionTime=0; this.actionDuration=0; this.actionFrom=v(); this.actionTo=v(); this.ledge=null; this.grabBlocked=false; this.obstacle='нет'; this.lastCheckpoint=v(0,.02,4);
     this.body=world.createRigidBody(RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(this.pos.x,this.pos.y+this.height/2,this.pos.z));
     this.collider=world.createCollider(RAPIER.ColliderDesc.capsule((this.height-2*this.radius)/2,this.radius),this.body);
     this.controller=world.createCharacterController(.025); this.controller.setApplyImpulsesToDynamicBodies(false); this.controller.setSlideEnabled(true);
     this.controller.setMaxSlopeClimbAngle(45*Math.PI/180); this.controller.setMinSlopeSlideAngle(50*Math.PI/180);
     this.controller.enableAutostep(.23,.2,false); this.controller.enableSnapToGround(.18);
   }
-  teleport(point) { this.pos.set(point[0],point[1]+.02,point[2]);this.velocity.set(0,0,0);this.ledge=null;this.actionTime=0;this.state='idle';this.jumpCount=0;this.flipTime=0;this.flipPhase=0;this.body.setNextKinematicTranslation({x:this.pos.x,y:this.pos.y+this.height/2,z:this.pos.z}); }
+  teleport(point) { this.pos.set(point[0],point[1]+.02,point[2]);this.velocity.set(0,0,0);this.ledge=null;this.grabBlocked=false;this.actionTime=0;this.state='idle';this.jumpCount=0;this.flipTime=0;this.flipPhase=0;this.body.setNextKinematicTranslation({x:this.pos.x,y:this.pos.y+this.height/2,z:this.pos.z}); }
   reset() { this.teleport(this.lastCheckpoint.toArray()); }
   setCheckpoint(point) { this.lastCheckpoint.set(...point); this.teleport(point); }
   #changeCrouch(value){
@@ -30,13 +30,23 @@ export class Player {
     this.collider=this.world.createCollider(RAPIER.ColliderDesc.capsule((currentHeight-2*this.radius)/2,this.radius),this.body);
     this.collider.setTranslation({x:0,y:(currentHeight-this.height)/2,z:0});return true;
   }
-  #nearObstacle(dir) {
-    const origin={x:this.pos.x,y:this.pos.y+.38,z:this.pos.z};
-    const ray=new RAPIER.Ray(origin,{x:dir.x,y:0,z:dir.z});
-    const hit=this.world.castRay(ray,.9,true,undefined,undefined,this.collider);
-    if(!hit) return null;
-    const point=ray.pointAt(hit.timeOfImpact); const obj=hit.collider.userData;
-    return obj ? {obj,point,distance:hit.timeOfImpact} : null;
+  #nearLedge(heading) {
+    let best=null;
+    for(const o of this.obstacles){
+      if(!o.ledge || o.top-this.pos.y<.4 || o.top-this.pos.y>3.05)continue;
+      for(const face of [
+        {normal:v(-1,0,0),distance:o.x-o.w/2-this.pos.x,tangent:this.pos.z-o.z,limit:o.d/2,anchor:v(o.x-o.w/2,o.top,clamp(this.pos.z,o.z-o.d/2,o.z+o.d/2))},
+        {normal:v(1,0,0),distance:this.pos.x-o.x-o.w/2,tangent:this.pos.z-o.z,limit:o.d/2,anchor:v(o.x+o.w/2,o.top,clamp(this.pos.z,o.z-o.d/2,o.z+o.d/2))},
+        {normal:v(0,0,-1),distance:o.z-o.d/2-this.pos.z,tangent:this.pos.x-o.x,limit:o.w/2,anchor:v(clamp(this.pos.x,o.x-o.w/2,o.x+o.w/2),o.top,o.z-o.d/2)},
+        {normal:v(0,0,1),distance:this.pos.z-o.z-o.d/2,tangent:this.pos.x-o.x,limit:o.w/2,anchor:v(clamp(this.pos.x,o.x-o.w/2,o.x+o.w/2),o.top,o.z+o.d/2)}
+      ]){
+        // The character must be outside this face and looking towards it.
+        if(face.distance<-.08 || face.distance>.78 || Math.abs(face.tangent)>face.limit+this.radius || heading.dot(face.normal)>-.2)continue;
+        const score=face.distance+Math.abs(face.tangent)*.02;
+        if(!best||score<best.score)best={obstacle:o,normal:face.normal,anchor:face.anchor,score};
+      }
+    }
+    return best;
   }
   #landingPoint(obj,face,dir){
     const marginX=Math.min(this.radius+.05,obj.w/2-.02),marginZ=Math.min(this.radius+.05,obj.d/2-.02);
@@ -49,18 +59,19 @@ export class Player {
   }
   #startAction(state,to,duration) {this.state=state;this.actionFrom.copy(this.pos);this.actionTo.copy(to);this.actionDuration=duration;this.actionTime=duration;this.velocity.set(0,0,0);this.sound.play(state==='landing'?'roll':state==='pull'?'climb':state);
     if(state==='pull'){const clip=this.animations.actions.climb;this.animations.play('climb',clip?clip.duration/duration:1,true);}}
-  #parkour(input,dir) {
-    if (!input.shift || !input.forward || dir.lengthSq()<.1) return false;
-    const hit=this.#nearObstacle(dir); this.obstacle=hit?.obj.kind || 'нет'; if(!hit) return false;
-    const o=hit.obj, rise=o.top-this.pos.y;
-    if(!o.ledge || rise<.3 || rise>2.5 || !this.#changeCrouch(false)) return false;
-    const landing=this.#landingPoint(o,hit.point,dir);
+  #grabLedge(input,dir) {
+    if(!input.shift || this.grabBlocked || input.descend)return false;
+    const heading=dir.lengthSq()>.01?dir.clone().normalize():v(-Math.sin(this.facing),0,-Math.cos(this.facing));
+    const hit=this.#nearLedge(heading);this.obstacle=hit?.obstacle.kind||'нет';
+    if(!hit || !this.#changeCrouch(false))return false;
+    const {obstacle:o,normal,anchor}=hit, inward=normal.clone().negate();
+    const landing=this.#landingPoint(o,anchor,inward);
     if(!this.#topClear(landing))return false;
-    if(rise<=.9) {const depth=Math.abs(dir.x)*o.w+Math.abs(dir.z)*o.d;
-      const farSide=v(hit.point.x+dir.x*(depth+this.radius+.1),o.top+.03,hit.point.z+dir.z*(depth+this.radius+.1));
-      this.#startAction('vault',farSide,.64);return true;}
-    if(rise<=1.35 || input.jump) {this.#startAction('pull',landing,.92);return true;}
-    this.ledge={obstacle:o,dir:dir.clone(),anchor:v(hit.point.x,o.top,hit.point.z),entering:true}; this.state='hang';this.pos.y=o.top-1.45;this.velocity.set(0,0,0);this.sound.play('climb');return true;
+    this.ledge={obstacle:o,dir:inward,anchor,entering:true};
+    const outside=anchor.clone().addScaledVector(normal,this.radius+.06);
+    const target=v(outside.x,o.top-this.height,outside.z);
+    this.#startAction('climb',target,clamp(Math.abs(target.y-this.pos.y)/1.4,.32,1.25));
+    this.grounded=false;this.coyote=0;this.jumpBuffer=0;return true;
   }
   #tryDescend(input,dir){
     if(!input.descend || !input.shift || !this.grounded)return false;
@@ -72,13 +83,13 @@ export class Player {
     const distance=alongX?o.w/2-face*(this.pos.x-o.x):o.d/2-face*(this.pos.z-o.z);
     if(distance>.65)return false;
     const point=this.pos.clone();if(alongX)point.x=o.x+face*(o.w/2+this.radius+.05);else point.z=o.z+face*(o.d/2+this.radius+.05);
-    point.y=o.top-1.45;this.pos.copy(point);
+    point.y=o.top-this.height;this.pos.copy(point);
     const anchor=alongX?v(o.x+face*o.w/2,o.top,this.pos.z):v(this.pos.x,o.top,o.z+face*o.d/2);
-    this.ledge={obstacle:o,dir:alongX?v(face,0,0):v(0,0,face),anchor,entering:true};this.state='hang';this.velocity.set(0,0,0);this.sound.play('climb');return true;
+    this.ledge={obstacle:o,dir:alongX?v(-face,0,0):v(0,0,-face),anchor,entering:true};this.state='hang';this.velocity.set(0,0,0);this.sound.play('climb');return true;
   }
   #ledgeStep(dt,input) {
     const o=this.ledge.obstacle, dir=this.ledge.dir, lateral=v(-dir.z,0,dir.x);
-    if(input.release) {this.ledge=null;this.state='airborne';this.velocity.y=-1;this.coyote=0;return;}
+    if(input.release) {this.ledge=null;this.grabBlocked=true;this.state='airborne';this.velocity.y=-1;this.coyote=0;return;}
     const step=(Number(input.right)-Number(input.left))*dt*1.25;
     const candidate=this.pos.clone().addScaledVector(lateral,step);
     const within=Math.abs(dir.x)>Math.abs(dir.z)?Math.abs(candidate.z-o.z)<o.d/2-this.radius:Math.abs(candidate.x-o.x)<o.w/2-this.radius;
@@ -92,12 +103,12 @@ export class Player {
   #commit() {this.body.setNextKinematicTranslation({x:this.pos.x,y:this.pos.y+this.height/2,z:this.pos.z});}
   step(dt,input,cameraYaw) {
     if(this.pos.y< -12){this.reset();return;}
+    if(!input.shift)this.grabBlocked=false;
     if(this.flipTime>0){this.flipTime=Math.max(0,this.flipTime-dt);this.flipPhase=this.flipTime>0?1-this.flipTime/this.flipDuration:0;}
-    if(this.ledge){this.#ledgeStep(dt,input);this.animations.play(this.state==='pull'?'climb':'climb');return;}
+    if(this.ledge&&input.release&&this.state==='climb'){this.ledge=null;this.grabBlocked=true;this.actionTime=0;this.state='airborne';this.velocity.y=-1;}
     if(this.actionTime>0){
       this.actionTime=Math.max(0,this.actionTime-dt);const t=1-this.actionTime/this.actionDuration;
       const desired=this.actionFrom.clone().lerp(this.actionTo,t);
-      if(this.state==='vault')desired.y+=Math.sin(Math.PI*t)*.4;
       if(this.state==='pull'){
         const up=clamp(t/.62,0,1),across=clamp((t-.62)/.38,0,1);
         const upEase=up*up*(3-2*up),acrossEase=across*across*(3-2*across);
@@ -108,10 +119,15 @@ export class Player {
       }
       this.controller.computeColliderMovement(this.collider,{x:desired.x-this.pos.x,y:desired.y-this.pos.y,z:desired.z-this.pos.z});
       const move=this.controller.computedMovement();this.pos.add(v(move.x,move.y,move.z));this.#commit();
-      const animationState=this.state==='pull'?'climb':this.state==='landing'?'roll':this.state==='heavy'?'heavy':'vault';
+      const animationState=this.state==='pull'||this.state==='climb'?'climb':this.state==='landing'?'roll':'heavy';
       const clip=this.animations.actions[animationState];this.animations.play(animationState,clip?clip.duration/this.actionDuration:1);
-      if(this.actionTime===0) this.state='idle';return;
+      if(this.actionTime===0){
+        if(this.state==='climb'&&this.ledge){this.state='hang';this.ledge.entering=false;}
+        else this.state='idle';
+      }
+      return;
     }
+    if(this.ledge){this.#ledgeStep(dt,input);this.animations.play('climb',0);return;}
     if(input.toggleCrouch && this.grounded)this.#changeCrouch(!this.crouch);
     const forward=v(-Math.sin(cameraYaw),0,-Math.cos(cameraYaw)); const right=v(Math.cos(cameraYaw),0,-Math.sin(cameraYaw));
     const direction=forward.multiplyScalar(Number(input.forward)-Number(input.back)).addScaledVector(right,Number(input.right)-Number(input.left));
@@ -129,7 +145,7 @@ export class Player {
       this.velocity.y=6.4;this.jumpBuffer=0;this.jumpCount=2;this.flipTime=this.flipDuration;this.flipPhase=0;this.state='doubleJump';
       this.animations.play('airborne',1,true);this.sound.play('jump');
     }
-    if(this.grounded && (this.#tryDescend(input,direction)||this.#parkour(input,direction))) {this.#commit();return;}
+    if((this.grounded&&this.#tryDescend(input,direction))||this.#grabLedge(input,direction)) {this.#commit();return;}
     this.velocity.y=Math.max(-20,this.velocity.y-20*dt);
     this.controller.computeColliderMovement(this.collider,{x:this.velocity.x*dt,y:this.velocity.y*dt,z:this.velocity.z*dt});
     const movement=this.controller.computedMovement();const wasGrounded=this.grounded;this.grounded=this.controller.computedGrounded();

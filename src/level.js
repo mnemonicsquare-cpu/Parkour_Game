@@ -27,8 +27,8 @@ export function createLevel(scene, world) {
   // Spawn and running field.
   for (let i = 0; i < 8; i++) box(-15 + i * 4, -.28, 8, .08, .04, 14, 'accent');
   // Vaults (amber), low walls, and a wall that must stop the controller.
-  box(-11, 0, -8, 4, .65, .55, 'vault', true);
-  box(-16, 0, -13, 2.5, .9, .7, 'vault', true);
+  box(-11, 0, -8, 4, .65, .55, 'vault');
+  box(-16, 0, -13, 2.5, .9, .7, 'vault');
   box(-7, 0, -14, 3, 1.15, .8, 'climb', true);
   box(15, 0, -11, 4, 2.3, .8, 'climb', true);
   box(8, 0, -12, 3, 1.6, 1, 'climb', true);
@@ -41,7 +41,7 @@ export function createLevel(scene, world) {
   box(-16, 0, -34, 5, 3, 5, 'roof', true);
   box(-8, 0, -34, 5, 1, 5, 'roof', true);
   // Continuous route.
-  box(0, 0, -14, 4, .7, .65, 'vault', true);
+  box(0, 0, -14, 4, .7, .65, 'vault');
   box(0, 0, -18, 4, 1.65, 1, 'climb', true);
   box(0, 0, -24, 5, 2.3, 5, 'roof', true);
   box(0, 0, -32, 5, 2.8, 5, 'roof', true);
