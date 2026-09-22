@@ -127,7 +127,7 @@ export class Player {
       }
       return;
     }
-    if(this.ledge){this.#ledgeStep(dt,input);this.animations.play('climb',0);return;}
+    if(this.ledge){this.#ledgeStep(dt,input);if(this.state==='hang')this.animations.play('hang');return;}
     if(input.toggleCrouch && this.grounded)this.#changeCrouch(!this.crouch);
     const forward=v(-Math.sin(cameraYaw),0,-Math.cos(cameraYaw)); const right=v(Math.cos(cameraYaw),0,-Math.sin(cameraYaw));
     const direction=forward.multiplyScalar(Number(input.forward)-Number(input.back)).addScaledVector(right,Number(input.right)-Number(input.left));
@@ -163,8 +163,8 @@ export class Player {
     if(this.actionTime>0)return;
     if(!this.grounded) this.state=this.flipTime>0?'doubleJump':this.velocity.y>1?'jump':'airborne';
     else if(this.crouch)this.state=horizontal>.25?'crouchWalk':'crouch';
-    else this.state=horizontal<.2?'idle':horizontal<3.3?'walk':'run';
-    this.animations.play(this.state==='doubleJump'?'airborne':this.state,this.state==='walk'?clamp(horizontal/2,.65,1.4):this.state==='run'?clamp(horizontal/5,.7,1.25):1);
+    else this.state=horizontal<.2?'idle':horizontal<3.3?'walk':input.shift?'sprint':'run';
+    this.animations.play(this.state==='doubleJump'?'airborne':this.state,this.state==='walk'?clamp(horizontal/2,.65,1.4):this.state==='run'||this.state==='sprint'?clamp(horizontal/5,.7,1.25):1);
     this.animations.root?.position.copy(this.pos);if(this.animations.root)this.animations.root.rotation.y=this.facing;
     this.sound.footsteps(dt,horizontal,this.grounded,this.crouch);
   }

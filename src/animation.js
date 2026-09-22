@@ -3,6 +3,7 @@ import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 
 const files = {
   idle: 'Action Adventure Pack/idle.fbx', walk: 'Action Adventure Pack/walking.fbx', run: 'Action Adventure Pack/running.fbx',
+  sprint: 'New animation/Sprint.fbx', hang: 'New animation/Hanging Idle.fbx',
   jump: 'Action Adventure Pack/jumping up.fbx', airborne: 'Action Adventure Pack/falling idle.fbx',
   roll: 'Action Adventure Pack/falling to roll.fbx', heavy: 'Action Adventure Pack/hard landing.fbx',
   crouch: 'Action Adventure Pack/stand to cover.fbx', crouchWalk: 'Action Adventure Pack/crouched sneaking left.fbx',
@@ -10,7 +11,7 @@ const files = {
   climb: 'Climbing Up Wall.fbx', descend: 'Climbing Down Wall.fbx'
 };
 const oneShot = new Set(['jump', 'roll', 'heavy', 'crouch', 'stand', 'vault', 'climb', 'descend']);
-const fades = { jump: .08, airborne: .18, roll: .08, heavy: .06, vault: .1, climb: .13, crouch: .22, stand: .22 };
+const fades = { jump: .08, airborne: .18, roll: .08, heavy: .06, vault: .1, climb: .13, hang: .13, sprint: .14, crouch: .22, stand: .22 };
 
 export class CharacterAnimations {
   constructor(scene, onProgress, settings) { this.scene = scene; this.onProgress = onProgress; this.settings=settings; this.actions = {}; this.missing = []; this.active = ''; this.model = null; }
