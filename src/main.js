@@ -35,7 +35,7 @@ window.addEventListener('keydown',e=>{const waiting=document.querySelector('[dat
   if(['Space','ArrowUp','ArrowDown'].includes(e.code))e.preventDefault();if(!keys.has(e.code))pressed.add(e.code);keys.add(e.code);
 });
 window.addEventListener('keyup',e=>keys.delete(e.code));window.addEventListener('blur',()=>{keys.clear();pressed.clear();showMenu();});
-document.addEventListener('pointerlockchange',()=>{if(!document.pointerLockElement)showMenu();else paused=false;});
+document.addEventListener('pointerlockchange',()=>{if(!document.pointerLockElement){$('#hint').style.display='block';showMenu();}else{paused=false;$('#hint').style.display='none';}});
 document.addEventListener('mousemove',e=>{if(!paused&&document.pointerLockElement){yaw-=e.movementX*settings.sensitivity;pitch=THREE.MathUtils.clamp(pitch-e.movementY*settings.sensitivity,-.2,1.2);}});
 renderer.domElement.addEventListener('wheel',e=>{cameraDistance=THREE.MathUtils.clamp(cameraDistance+Math.sign(e.deltaY)*.35,2,8);e.preventDefault();},{passive:false});
 addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
@@ -43,6 +43,13 @@ $('#resume').onclick=resume;
 function readInput(){return {forward:keys.has(bindings.forward),back:keys.has(bindings.back),left:keys.has(bindings.left),right:keys.has(bindings.right),shift:keys.has(bindings.run)||keys.has('ShiftRight'),jump:keys.has(bindings.jump),jumpPressed:pressed.has(bindings.jump),toggleCrouch:pressed.has(bindings.crouch)||pressed.has('ControlRight'),descend:keys.has(bindings.descend),release:pressed.has(bindings.release)};}
 
 await RAPIER.init();const world=new RAPIER.World({x:0,y:-20,z:0});const level=createLevel(scene,world);const sound=new SoundSystem(settings);await sound.load();
+const debugGroup=new THREE.Group();debugGroup.visible=false;scene.add(debugGroup);
+const capsuleDebug=new THREE.Mesh(new THREE.CapsuleGeometry(.28,1.24,4,10),new THREE.MeshBasicMaterial({color:0x4fe4b2,wireframe:true,depthTest:false}));debugGroup.add(capsuleDebug);
+const directionDebug=new THREE.ArrowHelper(new THREE.Vector3(0,0,-1),new THREE.Vector3(),1.4,0xffe27a,.28,.16);debugGroup.add(directionDebug);
+for(const obstacle of level.obstacles.filter(o=>o.ledge)){
+  const marker=new THREE.Mesh(new THREE.SphereGeometry(.09,8,6),new THREE.MeshBasicMaterial({color:0x77e8ff,depthTest:false}));
+  marker.position.set(obstacle.x,obstacle.top+.12,obstacle.z);debugGroup.add(marker);
+}
 const animations=new CharacterAnimations(scene,t=>{status.textContent=`Загрузка ${t}`;},settings);let player;
 try {const report=await animations.load();player=new Player(world,level.obstacles,animations,settings,sound);window.__parkour={player,animations,report};ready=true;
   const all=Object.entries(report.clips).map(([state,clip])=>`<option value="${state}">${state} · ${clip.file.split('/').pop()} (${clip.duration.toFixed(2)} c)</option>`).join('');$('#clip-select').innerHTML=all;
@@ -60,6 +67,9 @@ function updateCamera(dt){if(!player)return;const center=player.pos.clone().add(
 function animate(now){requestAnimationFrame(animate);const dt=Math.min(.05,(now-previous)/1000);previous=now;frames++;fpsClock+=dt;if(fpsClock>.5){fps=Math.round(frames/fpsClock);fpsClock=0;frames=0;}
   if(ready&&!paused){accumulator=Math.min(.2,accumulator+dt);while(accumulator>=step){const state=readInput();if(pressed.has(bindings.reset))player.reset();player.step(step,state,yaw);world.step();pressed.clear();accumulator-=step;}
     if(animations.root){animations.root.position.copy(player.pos);animations.root.rotation.y=player.facing;}
+    debugGroup.visible=debug;
+    if(debug){capsuleDebug.position.copy(player.pos).add(new THREE.Vector3(0,player.crouch?.6:.9,0));capsuleDebug.scale.y=player.crouch?.67:1;
+      directionDebug.position.copy(player.pos).add(new THREE.Vector3(0,.08,0));directionDebug.setDirection(new THREE.Vector3(-Math.sin(player.facing),0,-Math.cos(player.facing)));}
     animations.update(dt);updateCamera(dt);status.textContent=`${player.state} · ${Math.hypot(player.velocity.x,player.velocity.z).toFixed(1)} м/с`;
     if(debug)diagnostics.textContent=`Состояние: ${player.state}\nАнимация: ${animations.info}\nСкорость: ${Math.hypot(player.velocity.x,player.velocity.z).toFixed(2)} м/с\nВертикальная: ${player.velocity.y.toFixed(2)} м/с\nПоследнее падение: ${player.fallHeight.toFixed(2)} м\nКонтакт с землёй: ${player.grounded}\nПрепятствие: ${player.obstacle}\nУступ: ${player.ledge?.obstacle.kind||'нет'}\nКадров/с: ${fps}\nНет отдельных клипов: Ledge Hang, Ledge Move, Pull Up, Descend, Landing`;
   }else if(ready)animations.update(dt);
