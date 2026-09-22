@@ -30,7 +30,7 @@ export class CharacterAnimations {
     for (let i = 0; i < entries.length; i++) {
       const [state, file] = entries[i]; this.onProgress?.(`${i + 1}/${entries.length}: ${file}`);
       try {
-        const source = await load(`${import.meta.env.BASE_URL}assets/animations/` + encodeURIComponent(file.split('/').pop()));
+        const source = await load(`${import.meta.env.BASE_URL}assets/animations/` + file.split('/').map(encodeURIComponent).join('/'));
         let clip = source.animations[0];
         if (!clip) throw new Error('нет клипа');
         // All world translation belongs to the physical controller, never to an FBX root track.
