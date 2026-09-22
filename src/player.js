@@ -42,7 +42,8 @@ export class Player {
     const p={x,y:obj.top+.15,z}; const shape=new RAPIER.Capsule((this.height-2*this.radius)/2,this.radius);
     return !this.world.intersectionWithShape({x,y:obj.top+this.height/2+.08,z},{x:0,y:0,z:0,w:1},shape,undefined,undefined,this.collider);
   }
-  #startAction(state,to,duration) {this.state=state;this.actionFrom.copy(this.pos);this.actionTo.copy(to);this.actionDuration=duration;this.actionTime=duration;this.velocity.set(0,0,0);this.sound.play(state==='landing'?'roll':state==='pull'?'climb':state);}
+  #startAction(state,to,duration) {this.state=state;this.actionFrom.copy(this.pos);this.actionTo.copy(to);this.actionDuration=duration;this.actionTime=duration;this.velocity.set(0,0,0);this.sound.play(state==='landing'?'roll':state==='pull'?'climb':state);
+    if(state==='pull'){const clip=this.animations.actions.climb;this.animations.play('climb',clip?clip.duration/duration:1,true);}}
   #parkour(input,dir) {
     if (!input.shift || !input.forward || dir.lengthSq()<.1) return false;
     const hit=this.#nearObstacle(dir); this.obstacle=hit?.obj.kind || 'нет'; if(!hit) return false;
@@ -89,7 +90,8 @@ export class Player {
       if(this.state==='vault'||this.state==='pull') desired.y+=Math.sin(Math.PI*t)*(this.state==='vault'?.4:.55);
       this.controller.computeColliderMovement(this.collider,{x:desired.x-this.pos.x,y:desired.y-this.pos.y,z:desired.z-this.pos.z});
       const move=this.controller.computedMovement();this.pos.add(v(move.x,move.y,move.z));this.#commit();
-      this.animations.play(this.state==='pull'?'climb':this.state==='landing'?'roll':this.state==='heavy'?'heavy':'vault');
+      const animationState=this.state==='pull'?'climb':this.state==='landing'?'roll':this.state==='heavy'?'heavy':'vault';
+      const clip=this.animations.actions[animationState];this.animations.play(animationState,clip?clip.duration/this.actionDuration:1);
       if(this.actionTime===0) this.state='idle';return;
     }
     if(input.toggleCrouch && this.grounded)this.#changeCrouch(!this.crouch);
@@ -111,7 +113,7 @@ export class Player {
     this.pos.add(v(movement.x,movement.y,movement.z));
     if(this.grounded){
       if(!wasGrounded){this.fallHeight=Math.max(0,this.fallStart-this.pos.y);this.sound.play('land');
-        if(this.fallHeight>this.settings.heavyHeight){this.#startAction('heavy',this.pos.clone(),.8);}
+        if(this.fallHeight>this.settings.heavyHeight){this.#startAction('heavy',this.pos.clone(),1.4);}
         else if(this.fallHeight>this.height && Math.hypot(this.velocity.x,this.velocity.z)>1.2){const rollDir=v(this.velocity.x,0,this.velocity.z).normalize();this.#startAction('landing',this.pos.clone().addScaledVector(rollDir,1.05),.72);}
       }
       this.velocity.y=0;this.fallStart=this.pos.y;

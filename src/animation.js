@@ -41,14 +41,14 @@ export class CharacterAnimations {
     }
     this.play('idle'); return { height, scale, clips: this.actions, missing: this.missing };
   }
-  play(state, speed = 1) {
+  play(state, speed = 1, restart = false) {
     const next = this.actions[state] || this.actions.idle; if (!next) return;
     if (this.active !== state) {
       const previous = this.actions[this.active]?.action;
       next.action.reset().setEffectiveWeight(1).play();
       if (previous) { previous.fadeOut(fades[state] ?? this.settings.fade); next.action.fadeIn(fades[state] ?? this.settings.fade); }
       this.active = state;
-    }
+    } else if(restart) next.action.reset().play();
     next.action.setEffectiveTimeScale(speed);
   }
   update(dt) { this.mixer?.update(dt); }
